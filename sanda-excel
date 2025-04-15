@@ -1,0 +1,292 @@
+import React, { useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, LabelList } from 'recharts';
+
+// Mock data for Sanda City migration analysis
+const ageDistributionData = [
+  { name: '20-29', count: 45, percentage: 15 },
+  { name: '30-39', count: 87, percentage: 29 },
+  { name: '40-49', count: 63, percentage: 21 },
+  { name: '50-59', count: 42, percentage: 14 },
+  { name: '60-69', count: 39, percentage: 13 },
+  { name: '70+', count: 24, percentage: 8 },
+];
+
+const migrationReasonsData = [
+  { name: '自然環境', value: 32 },
+  { name: '子育て環境', value: 28 },
+  { name: '住宅コスト', value: 15 },
+  { name: '交通アクセス', value: 12 },
+  { name: '職場立地', value: 8 },
+  { name: 'その他', value: 5 },
+];
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
+const satisfactionTrendData = [
+  { year: 2020, 自然環境: 4.2, 子育て環境: 3.8, 交通アクセス: 3.5, 住宅コスト: 4.0 },
+  { year: 2021, 自然環境: 4.3, 子育て環境: 3.9, 交通アクセス: 3.4, 住宅コスト: 4.1 },
+  { year: 2022, 自然環境: 4.4, 子育て環境: 4.1, 交通アクセス: 3.3, 住宅コスト: 4.0 },
+  { year: 2023, 自然環境: 4.5, 子育て環境: 4.3, 交通アクセス: 3.2, 住宅コスト: 3.9 },
+  { year: 2024, 自然環境: 4.6, 子育て環境: 4.5, 交通アクセス: 3.1, 住宅コスト: 3.8 },
+];
+
+const wordsData = [
+  { text: '自然', value: 64 },
+  { text: '子育て', value: 58 },
+  { text: '住宅価格', value: 42 },
+  { text: '通勤', value: 38 },
+  { text: '公園', value: 36 },
+  { text: '学校', value: 34 },
+  { text: '駅近', value: 32 },
+  { text: '静か', value: 30 },
+  { text: '安全', value: 28 },
+  { text: '便利', value: 26 },
+  { text: '緑豊か', value: 25 },
+  { text: '住環境', value: 24 },
+  { text: '家族', value: 22 },
+  { text: '地域コミュニティ', value: 20 },
+  { text: '空気', value: 18 },
+];
+
+const clusterData = [
+  { name: '子育て重視型', count: 42, percentage: 35 },
+  { name: '自然環境重視型', count: 36, percentage: 30 },
+  { name: '利便性重視型', count: 24, percentage: 20 },
+  { name: '住宅コスト重視型', count: 18, percentage: 15 },
+];
+
+// Custom label component for bar charts
+const renderCustomizedLabel = (props) => {
+  const { x, y, width, height, value } = props;
+  return (
+    <text x={x + width / 2} y={y - 10} fill="#000000" textAnchor="middle" dominantBaseline="middle">
+      {value}
+    </text>
+  );
+};
+
+const SandaVisualizations = () => {
+  const [activeTab, setActiveTab] = useState('age');
+  
+  const renderWordCloud = () => {
+    return (
+      <div className="flex flex-wrap justify-center p-4 border border-gray-200 rounded bg-white">
+        {wordsData.map((word, index) => {
+          const fontSize = 14 + (word.value / 10);
+          return (
+            <div 
+              key={index} 
+              className="m-2 p-2 rounded"
+              style={{ 
+                fontSize: `${fontSize}px`,
+                opacity: 0.7 + (word.value / 100),
+                color: COLORS[index % COLORS.length]
+              }}
+            >
+              {word.text} ({word.value})
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+  
+  return (
+    <div className="p-4 bg-gray-50 min-h-screen">
+      <h1 className="text-2xl font-bold text-center mb-6">三田市移住者分析ダッシュボード</h1>
+      
+      <div className="flex justify-center mb-6">
+        <div className="flex space-x-2 bg-white rounded shadow p-1">
+          <button 
+            className={`px-4 py-2 rounded ${activeTab === 'age' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+            onClick={() => setActiveTab('age')}
+          >
+            年齢層分布
+          </button>
+          <button 
+            className={`px-4 py-2 rounded ${activeTab === 'reasons' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+            onClick={() => setActiveTab('reasons')}
+          >
+            移住理由
+          </button>
+          <button 
+            className={`px-4 py-2 rounded ${activeTab === 'satisfaction' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+            onClick={() => setActiveTab('satisfaction')}
+          >
+            満足度推移
+          </button>
+          <button 
+            className={`px-4 py-2 rounded ${activeTab === 'wordcloud' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+            onClick={() => setActiveTab('wordcloud')}
+          >
+            キーワード
+          </button>
+          <button 
+            className={`px-4 py-2 rounded ${activeTab === 'clusters' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+            onClick={() => setActiveTab('clusters')}
+          >
+            移住者タイプ
+          </button>
+        </div>
+      </div>
+      
+      <div className="bg-white p-4 rounded shadow">
+        {activeTab === 'age' && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4 text-center">移住者の年齢層分布</h2>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="90%">
+                <BarChart
+                  data={ageDistributionData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend wrapperStyle={{position: 'relative', marginTop: '10px', width: '100%'}} />
+                  <Bar dataKey="count" name="人数" fill="#0088FE">
+                    <LabelList dataKey="count" position="top" fill="#000000" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="mt-4 text-center text-gray-600">
+              30代と40代の移住者が全体の50%を占め、子育て世代の移住が目立ちます。
+            </p>
+          </div>
+        )}
+        
+        {activeTab === 'reasons' && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4 text-center">移住理由の割合</h2>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="90%">
+                <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                  <Pie
+                    data={migrationReasonsData}
+                    cx="50%"
+                    cy="45%"
+                    labelLine={true}
+                    outerRadius={70}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({name, value, percent}) => `${name} ${value}人 (${(percent * 100).toFixed(0)}%)`}
+                  >
+                    {migrationReasonsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="mt-4 text-center text-gray-600">
+              自然環境と子育て環境が主要な移住理由となっており、三田市の特色が表れています。
+            </p>
+          </div>
+        )}
+        
+        {activeTab === 'satisfaction' && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4 text-center">項目別満足度の推移 (5点満点)</h2>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="90%">
+                <LineChart
+                  data={satisfactionTrendData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="year" />
+                  <YAxis domain={[0, 5]} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{position: 'relative', marginTop: '10px', width: '100%'}} />
+                  <Line type="monotone" dataKey="自然環境" stroke="#0088FE" activeDot={{ r: 8 }}>
+                    <LabelList dataKey="自然環境" position="top" />
+                  </Line>
+                  <Line type="monotone" dataKey="子育て環境" stroke="#00C49F">
+                    <LabelList dataKey="子育て環境" position="top" />
+                  </Line>
+                  <Line type="monotone" dataKey="交通アクセス" stroke="#FFBB28">
+                    <LabelList dataKey="交通アクセス" position="bottom" />
+                  </Line>
+                  <Line type="monotone" dataKey="住宅コスト" stroke="#FF8042">
+                    <LabelList dataKey="住宅コスト" position="bottom" />
+                  </Line>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="mt-4 text-center text-gray-600">
+              自然環境と子育て環境の満足度は年々上昇している一方、交通アクセスの評価は緩やかに低下しています。
+            </p>
+          </div>
+        )}
+        
+        {activeTab === 'wordcloud' && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4 text-center">移住理由に関するキーワード</h2>
+            {renderWordCloud()}
+            <p className="mt-4 text-center text-gray-600">
+              自然言語処理によって抽出された、移住者のコメントで頻出するキーワードです。サイズは言及頻度を表しています。
+            </p>
+          </div>
+        )}
+        
+        {activeTab === 'clusters' && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4 text-center">自然言語処理による移住者タイプ分類</h2>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="90%">
+                <BarChart
+                  data={clusterData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend wrapperStyle={{position: 'relative', marginTop: '10px', width: '100%'}} />
+                  <Bar dataKey="count" name="人数" fill="#8884d8">
+                    <LabelList dataKey="count" position="top" formatter={(value) => `${value}人`} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="mt-4 text-center text-gray-600">
+              NLPによるクラスタリング分析の結果、移住者は主に4つの価値観グループに分類されます。
+              子育て環境を重視するグループと自然環境を重視するグループが大多数を占めています。
+            </p>
+          </div>
+        )}
+      </div>
+      
+      <div className="mt-6 bg-white p-4 rounded shadow">
+        <h2 className="text-xl font-semibold mb-2">分析結果概要</h2>
+        <ul className="list-disc pl-6 space-y-2">
+          <li>
+            <span className="font-medium">主要ターゲット層:</span> 30-40代の子育て世代が中心
+          </li>
+          <li>
+            <span className="font-medium">移住の決め手:</span> 自然環境の豊かさと子育てに適した環境
+          </li>
+          <li>
+            <span className="font-medium">課題点:</span> 交通アクセスへの満足度低下傾向
+          </li>
+          <li>
+            <span className="font-medium">テキスト分析結果:</span> 「自然」「子育て」「静か」「安全」などのキーワードが頻出
+          </li>
+        </ul>
+        
+        <h3 className="text-lg font-semibold mt-4 mb-2">提言</h3>
+        <ol className="list-decimal pl-6 space-y-2">
+          <li>子育て世代向けの移住促進策を強化（教育環境、子育て支援サービスのPR）</li>
+          <li>自然環境を活かしたライフスタイル提案（アウトドア活動、自然体験プログラム）</li>
+          <li>交通アクセス改善または代替手段の検討（コミュニティバス、カーシェアリング）</li>
+          <li>移住者コミュニティの形成支援（同じ価値観を持つ人々の交流促進）</li>
+        </ol>
+      </div>
+    </div>
+  );
+};
+
+export default SandaVisualizations;
