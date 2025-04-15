@@ -1,0 +1,193 @@
+import React from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+
+const JapaneseDocumentAnalysis = () => {
+  // Top 10 words data (excluding grammatical markers)
+  const wordFrequencyData = [
+    { word: "地域", count: 443 },
+    { word: "教育", count: 168 },
+    { word: "環境", count: 150 },
+    { word: "持続可能", count: 87 },
+    { word: "活性化", count: 75 },
+    { word: "コミュニティ", count: 72 },
+    { word: "発展", count: 68 },
+    { word: "重要", count: 65 },
+    { word: "連携", count: 58 },
+    { word: "農業", count: 55 }
+  ];
+
+  // Category data
+  const categoryData = [
+    { name: "地域社会 (Community)", value: 2091 },
+    { name: "環境 (Environment)", value: 992 },
+    { name: "教育 (Education)", value: 845 },
+    { name: "経済 (Economy)", value: 551 },
+    { name: "農業 (Agriculture)", value: 328 },
+    { name: "文化 (Culture)", value: 237 }
+  ];
+
+  // Sentiment data
+  const sentimentData = [
+    { name: "ポジティブ (Positive)", value: 1421 },
+    { name: "ネガティブ (Negative)", value: 330 }
+  ];
+
+  // Top positive and negative words
+  const topPositiveWords = [
+    { word: "重要", count: 394 },
+    { word: "発展", count: 172 },
+    { word: "活性", count: 120 },
+    { word: "成長", count: 111 },
+    { word: "促進", count: 107 }
+  ];
+
+  const topNegativeWords = [
+    { word: "影響", count: 155 },
+    { word: "課題", count: 57 },
+    { word: "問題", count: 48 },
+    { word: "不安", count: 14 },
+    { word: "格差", count: 11 }
+  ];
+
+  // Colors for the charts
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+  const SENTIMENT_COLORS = ['#00C49F', '#FF8042'];
+
+  return (
+    <div className="flex flex-col items-center w-full">
+      <h2 className="text-xl font-bold mb-8 text-center">日本語ドキュメント分析</h2>
+      
+      {/* Top Words Chart */}
+      <div className="w-full mb-8">
+        <h3 className="text-lg font-semibold mb-3 text-center">頻出単語トップ10</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={wordFrequencyData}
+              margin={{ top: 5, right: 30, left: 30, bottom: 50 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="word"
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar 
+                dataKey="count" 
+                name="出現回数" 
+                fill="#0088FE"
+                label={{ 
+                  position: 'top',
+                  formatter: (value) => `${value}回`,
+                  fill: '#000',
+                  fontSize: 12
+                }} 
+              />
+              
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      
+      {/* Category Analysis */}
+      <div className="w-full mb-8">
+        <h3 className="text-lg font-semibold mb-3 text-center">カテゴリー分析</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={categoryData}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar 
+                dataKey="value" 
+                name="言及数" 
+                fill="#00C49F"
+                label={{ 
+                  position: 'top',
+                  formatter: (value) => `${value}回`,
+                  fill: '#000',
+                  fontSize: 12
+                }} 
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      
+      {/* Sentiment Analysis */}
+      <div className="w-full mb-8">
+        <h3 className="text-lg font-semibold mb-3 text-center">感情分析</h3>
+        <div className="flex flex-row">
+          <div className="w-1/2 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={sentimentData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={true}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {sentimentData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={SENTIMENT_COLORS[index % SENTIMENT_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          
+          <div className="w-1/2">
+            <div className="mb-4">
+              <h4 className="text-base font-medium mb-2">トップポジティブ単語</h4>
+              <ul className="list-disc pl-6">
+                {topPositiveWords.map((item, index) => (
+                  <li key={`pos-${index}`}>{item.word}: {item.count}回</li>
+                ))}
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="text-base font-medium mb-2">トップネガティブ単語</h4>
+              <ul className="list-disc pl-6">
+                {topNegativeWords.map((item, index) => (
+                  <li key={`neg-${index}`}>{item.word}: {item.count}回</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="w-full px-4">
+        <h3 className="text-lg font-semibold mb-2">分析の総括</h3>
+        <p className="mb-2">
+          このドキュメントは主に「地域」や「教育」、「環境」といったテーマに焦点を当てています。
+          特に「地域社会」に関連する言及が最も多く、持続可能な地域づくりや地域活性化に重点を置いていることがわかります。
+        </p>
+        <p className="mb-2">
+          感情分析からは、ドキュメント全体が肯定的なトーンで書かれていることが示されています（ポジティブワード:81%、ネガティブワード:19%）。
+          「重要」「発展」「活性」などの前向きな表現が多用されており、地域の未来に対して建設的な姿勢が見られます。
+        </p>
+        <p>
+          ネガティブな言葉としては「影響」「課題」「問題」が検出されていますが、これらは多くの場合、
+          解決すべき問題点として建設的に言及されているものと推測されます。
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default JapaneseDocumentAnalysis;
