@@ -1,0 +1,438 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import MeCab
+import japanize_matplotlib
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.cluster import KMeans
+from gensim.models import Word2Vec
+import plotly.express as px
+import plotly.graph_objects as go
+from wordcloud import WordCloud
+import matplotlib.font_manager as fm
+from matplotlib.font_manager import FontProperties
+import os
+from collections import defaultdict
+
+# 日本語フォントの設定
+plt.rcParams['font.family'] = 'IPAexGothic'
+
+# 1. データ読み込み
+def load_data(file_path):
+    """Excelファイルを読み込む"""
+    print(f"Loading data from {file_path}...")
+    df = pd.read_excel(file_path)
+    print(f"Loaded {len(df)} records with columns: {', '.join(df.columns)}")
+    return df
+
+# 2. 形態素解析
+def tokenize_text(text, mecab=None):
+    """テキストを形態素解析して単語に分割する"""
+    if mecab is None:
+        mecab = MeCab.Tagger("-Owakati")
+    
+    if isinstance(text, str):
+        return mecab.parse(text).strip().split()
+    return []
+
+def process_text_columns(df, text_columns):
+    """複数のテキスト列を処理して形態素解析結果を返す"""
+    mecab = MeCab.Tagger("-Owakati")
+    
+    # すべてのテキスト列を結合
+    combined_text = df[text_columns].fillna('').agg(' '.join, axis=1)
+    
+    # 形態素解析
+    df['tokens'] = combined_text.apply(lambda x: tokenize_text(x, mecab))
+    
+    # 解析結果を確認
+    print(f"Tokenized {len(df)} texts")
+    if len(df) > 0:
+        print(f"Sample tokenization: {df['tokens'].iloc[0][:10]}...")
+    
+    return df
+
+# 3. ストップワード除去
+def remove_stopwords(tokens, stopwords=None):
+    """ストップワードを除去する"""
+    if stopwords is None:
+        # 日本語のストップワード例
+        stopwords = ['の', 'に', 'は', 'を', 'た', 'が', 'で', 'て', 'と', 'し', 'れ', 'さ', 
+                    'ある', 'いる', 'も', 'する', 'から', 'な', 'こと', 'として', 'い', 'や',
+                    'れる', 'など', 'なっ', 'ない', 'この', 'ため', 'その', 'あっ', 'よう', 
+                    'また', 'もの', 'という', 'あり', 'まで', 'られ', 'なる', 'へ', 'か', 'だ',
+                    'これ', 'によって', 'により', 'おり', 'より', 'による', 'ず', 'なり', 'られる',
+                    'において', 'ば', 'なかっ', 'なく', 'しかし', 'について', 'せ', 'だっ', 'その後',
+                    'できる', 'それ', 'う', 'ので', 'なお', 'のみ', 'でき', 'き', 'つ', 'における',
+                    'および', 'いう', 'さらに', 'でも', 'ら', 'たり', 'その他', 'に関する', 'たち',
+                    'ます', 'ん', 'なら', 'に対して', '特に', 'せる', '及び', 'これら', 'とき', 'では',
+                    'にて', 'ほか', 'ながら', 'うち', 'そして', 'とともに', 'ただし', 'かつて', 'それぞれ',
+                    'または', 'に対する', 'ほとんど', 'と共に', 'といった', 'です', 'とも', 'ところ', 'ここ']
+    
+    return [token for token in tokens if token not in stopwords]
+
+# 4. トピックモデリング
+def perform_topic_modeling(df, n_topics=5, max_features=1000):
+    """LDAを用いたトピックモデリングを実行する"""
+    print(f"Performing topic modeling with {n_topics} topics...")
+    
+    # トークンをスペース区切りのテキストに変換
+    docs = [' '.join(tokens) for tokens in df['tokens']]
+    
+    # TF-IDF変換
+    vectorizer = TfidfVectorizer(max_features=max_features)
+    X = vectorizer.fit_transform(docs)
+    feature_names = vectorizer.get_feature_names_out()
+    
+    # LDAモデル
+    lda = LatentDirichletAllocation(n_components=n_topics, random_state=42)
+    lda.fit(X)
+    
+    # トピック単語の抽出
+    topic_keywords = []
+    for topic_idx, topic in enumerate(lda.components_):
+        top_keywords_idx = topic.argsort()[:-11:-1]
+        top_keywords = [feature_names[i] for i in top_keywords_idx]
+        topic_keywords.append(top_keywords)
+        print(f"Topic {topic_idx+1}: {', '.join(top_keywords)}")
+    
+    # 各文書のトピック分布
+    doc_topic_dist = lda.transform(X)
+    df['primary_topic'] = np.argmax(doc_topic_dist, axis=1)
+    
+    # トピック分布を追加
+    for i in range(n_topics):
+        df[f'topic_{i+1}_score'] = doc_topic_dist[:, i]
+    
+    return df, topic_keywords, lda, vectorizer
+
+# 5. 感情分析
+def analyze_sentiment(df, text_columns, sentiment_dict=None):
+    """簡易的な感情分析を行う"""
+    if sentiment_dict is None:
+        # 簡易的な日本語の感情辞書
+        sentiment_dict = {
+            'ポジティブ': ['良い', '素晴らしい', '満足', '快適', '気持ちいい', '便利', '充実', '魅力的', '安心', '優れた',
+                      '好き', '楽しい', '嬉しい', '美しい', '安全', '豊か', '快適', '安らぎ', '落ち着く', '希望',
+                      '推奨', '最高', '助かる', '親切', '丁寧', '感謝', '喜び', '幸せ', '便利', '適切'],
+            'ネガティブ': ['悪い', '不満', '不便', '苦しい', '嫌い', '残念', '不安', '問題', '困難', '不快',
+                      '悲しい', '怒り', '心配', '不足', '劣る', '欠点', '危険', '混雑', '煩わしい', '面倒',
+                      '迷惑', '不信', '不十分', '批判', '不満足', '不安定', '不快', '不審', '疑問', '薄い']
+        }
+    
+    # 感情スコアを計算
+    df['positive_score'] = 0
+    df['negative_score'] = 0
+    
+    # テキスト列を結合
+    combined_text = df[text_columns].fillna('').agg(' '.join, axis=1)
+    
+    # 感情スコアを計算
+    for i, text in enumerate(combined_text):
+        if isinstance(text, str):
+            for word in sentiment_dict['ポジティブ']:
+                if word in text:
+                    df.at[i, 'positive_score'] += 1
+            
+            for word in sentiment_dict['ネガティブ']:
+                if word in text:
+                    df.at[i, 'negative_score'] += 1
+    
+    # 総合感情スコア
+    df['sentiment_score'] = df['positive_score'] - df['negative_score']
+    
+    print("Sentiment analysis completed")
+    print(f"Average sentiment score: {df['sentiment_score'].mean():.2f}")
+    
+    return df
+
+# 6. クラスタリング分析
+def perform_clustering(df, n_clusters=4, features=None):
+    """K-meansクラスタリングを実行する"""
+    print(f"Performing K-means clustering with {n_clusters} clusters...")
+    
+    # クラスタリングに使用する特徴
+    if features is None:
+        # トピックスコアをクラスタリングに使用
+        features = [col for col in df.columns if col.startswith('topic_') and col.endswith('_score')]
+    
+    # データの準備
+    X = df[features].fillna(0).values
+    
+    # K-means
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    df['cluster'] = kmeans.fit_predict(X)
+    
+    # クラスタの特徴を分析
+    cluster_centers = kmeans.cluster_centers_
+    
+    # 各クラスタの特徴を表示
+    for i in range(n_clusters):
+        cluster_size = (df['cluster'] == i).sum()
+        print(f"Cluster {i}: {cluster_size} records ({cluster_size/len(df)*100:.1f}%)")
+        
+        # このクラスタでのトピックスコアの平均
+        topic_scores = {feat: cluster_centers[i, j] for j, feat in enumerate(features)}
+        top_topics = sorted(topic_scores.items(), key=lambda x: x[1], reverse=True)
+        print(f"  Top topics: {', '.join([f'{t[0]}: {t[1]:.3f}' for t in top_topics[:3]])}")
+    
+    return df, kmeans
+
+# 7. 可視化関数
+def visualize_age_distribution(df, age_column, save_path=None):
+    """年齢層の分布を可視化する"""
+    plt.figure(figsize=(10, 6))
+    
+    # データの集計
+    age_counts = df[age_column].value_counts().sort_index()
+    
+    # グラフ描画
+    ax = sns.barplot(x=age_counts.index, y=age_counts.values)
+    
+    # 各バーの上に数値を表示
+    for i, v in enumerate(age_counts.values):
+        ax.text(i, v + 1, str(v), ha='center')
+    
+    plt.title('移住者の年齢層分布')
+    plt.xlabel('年齢層')
+    plt.ylabel('人数')
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved age distribution plot to {save_path}")
+    
+    plt.show()
+
+def visualize_migration_reasons(df, reason_column, save_path=None):
+    """移住理由の割合を円グラフで可視化する"""
+    plt.figure(figsize=(10, 8))
+    
+    # データの集計
+    reason_counts = df[reason_column].value_counts()
+    
+    # グラフ描画
+    plt.pie(reason_counts.values, labels=reason_counts.index, autopct='%1.1f%%', startangle=90)
+    plt.axis('equal')
+    plt.title('移住理由の割合')
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved migration reasons plot to {save_path}")
+    
+    plt.show()
+
+def visualize_topic_wordcloud(topic_keywords, topic_idx, save_path=None):
+    """トピックのワードクラウドを生成する"""
+    # 日本語フォントのパスを設定
+    font_path = '/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc'  # Mac用
+    if not os.path.exists(font_path):
+        # Linuxの場合
+        font_path = '/usr/share/fonts/truetype/fonts-japanese-gothic.ttf'
+    if not os.path.exists(font_path):
+        # Windowsの場合
+        font_path = 'C:/Windows/Fonts/msgothic.ttc'
+    
+    # キーワードを結合
+    text = ' '.join(topic_keywords[topic_idx])
+    
+    # ワードクラウド生成
+    try:
+        wordcloud = WordCloud(width=800, height=400, 
+                              background_color='white', 
+                              font_path=font_path,
+                              max_font_size=150).generate(text)
+                              
+        plt.figure(figsize=(10, 6))
+        plt.imshow(wordcloud, interpolation='bilinear')
+        plt.axis('off')
+        plt.title(f'Topic {topic_idx+1} Keywords')
+        
+        if save_path:
+            plt.savefig(save_path, bbox_inches='tight')
+            print(f"Saved topic wordcloud to {save_path}")
+        
+        plt.show()
+    except Exception as e:
+        print(f"Error generating wordcloud: {e}")
+        print("Please check if the font file exists or specify a different font path.")
+
+def visualize_clusters(df, cluster_column, feature_column, save_path=None):
+    """クラスターと属性の関係を可視化する"""
+    plt.figure(figsize=(12, 8))
+    
+    # クロス集計
+    cross_tab = pd.crosstab(df[feature_column], df[cluster_column])
+    
+    # ヒートマップ作成
+    ax = sns.heatmap(cross_tab, annot=True, cmap='YlGnBu', fmt='d')
+    
+    plt.title(f'{feature_column}別クラスター分布')
+    plt.xlabel('クラスター')
+    plt.ylabel(feature_column)
+    
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Saved clusters heatmap to {save_path}")
+    
+    plt.show()
+
+def create_interactive_dashboard(df, save_path=None):
+    """Plotlyを使用したインタラクティブダッシュボードを作成する"""
+    # クラスターごとの散布図
+    fig = px.scatter(df, x='年齢', y='家族人数', color='cluster',
+                     hover_data=['移住前住所', '移住理由', '満足度'],
+                     title='移住者クラスタリング')
+    
+    if save_path:
+        fig.write_html(save_path)
+        print(f"Saved interactive dashboard to {save_path}")
+    
+    fig.show()
+
+# 8. 実行機能
+def analyze_migration_data(file_path, output_dir='output'):
+    """三田市移住者データの総合分析を実行する"""
+    # 出力ディレクトリの作成
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 1. データ読み込み
+    df = load_data(file_path)
+    
+    # 列名の確認（データに合わせて調整が必要）
+    expected_columns = ['年齢', '家族人数', '移住前住所', '移住理由', '満足度', '自由回答欄']
+    missing_columns = [col for col in expected_columns if col not in df.columns]
+    
+    if missing_columns:
+        print(f"Warning: Missing expected columns: {missing_columns}")
+        print("Available columns:", df.columns.tolist())
+        # 列名のマッピングが必要かもしれません
+    
+    # 2. テキスト処理
+    text_columns = [col for col in df.columns if '回答' in col or '理由' in col or 'コメント' in col]
+    if not text_columns:
+        text_columns = ['自由回答欄']  # デフォルトの列名
+    
+    df = process_text_columns(df, text_columns)
+    
+    # 3. ストップワード除去
+    df['tokens_filtered'] = df['tokens'].apply(remove_stopwords)
+    
+    # 4. トピックモデリング
+    df, topic_keywords, lda_model, vectorizer = perform_topic_modeling(df, n_topics=5)
+    
+    # 5. 感情分析
+    df = analyze_sentiment(df, text_columns)
+    
+    # 6. クラスタリング
+    df, kmeans_model = perform_clustering(df, n_clusters=4)
+    
+    # 7. 可視化
+    # 7.1 年齢層分布
+    age_column = '年齢' if '年齢' in df.columns else '年齢層'
+    if age_column in df.columns:
+        visualize_age_distribution(df, age_column, save_path=f"{output_dir}/age_distribution.png")
+    
+    # 7.2 移住理由
+    reason_column = '移住理由' if '移住理由' in df.columns else None
+    if reason_column and reason_column in df.columns:
+        visualize_migration_reasons(df, reason_column, save_path=f"{output_dir}/migration_reasons.png")
+    
+    # 7.3 トピックのワードクラウド
+    for topic_idx in range(len(topic_keywords)):
+        visualize_topic_wordcloud(topic_keywords, topic_idx, save_path=f"{output_dir}/topic_{topic_idx+1}_wordcloud.png")
+    
+    # 7.4 クラスターと属性の関係
+    for feature in [age_column, '家族人数', '満足度']:
+        if feature in df.columns:
+            visualize_clusters(df, 'cluster', feature, save_path=f"{output_dir}/cluster_{feature}_heatmap.png")
+    
+    # 7.5 インタラクティブダッシュボード
+    if '年齢' in df.columns and '家族人数' in df.columns:
+        create_interactive_dashboard(df, save_path=f"{output_dir}/migration_dashboard.html")
+    
+    # 8. レポート生成
+    generate_report(df, topic_keywords, output_dir)
+    
+    # 9. 分析済みデータの保存
+    df.to_excel(f"{output_dir}/analyzed_data.xlsx", index=False)
+    
+    print(f"Analysis completed. Results saved to {output_dir} directory.")
+    
+    return df
+
+def generate_report(df, topic_keywords, output_dir):
+    """分析結果のレポートを生成する"""
+    report = "# 三田市移住者分析レポート\n\n"
+    
+    # 基本統計
+    report += "## 1. 基本統計\n\n"
+    
+    total_migrants = len(df)
+    report += f"- 総移住者数: {total_migrants}人\n"
+    
+    if '年齢' in df.columns:
+        report += f"- 平均年齢: {df['年齢'].mean():.1f}歳\n"
+    
+    if '家族人数' in df.columns:
+        report += f"- 平均家族人数: {df['家族人数'].mean():.1f}人\n"
+    
+    if '満足度' in df.columns:
+        report += f"- 平均満足度: {df['満足度'].mean():.2f}/5.0\n"
+    
+    # トピック分析
+    report += "\n## 2. 自然言語処理によるトピック分析\n\n"
+    
+    for i, keywords in enumerate(topic_keywords):
+        topic_count = (df['primary_topic'] == i).sum()
+        topic_percentage = topic_count / total_migrants * 100
+        report += f"### トピック{i+1}: {topic_percentage:.1f}%の移住者\n"
+        report += f"主要キーワード: {', '.join(keywords[:5])}\n\n"
+    
+    # クラスター分析
+    report += "## 3. 移住者クラスター分析\n\n"
+    
+    cluster_counts = df['cluster'].value_counts().sort_index()
+    for cluster, count in cluster_counts.items():
+        percentage = count / total_migrants * 100
+        report += f"### クラスター{cluster}: {count}人 ({percentage:.1f}%)\n"
+        
+        # このクラスターの特徴
+        if 'primary_topic' in df.columns:
+            cluster_topics = df[df['cluster'] == cluster]['primary_topic'].value_counts()
+            main_topic = cluster_topics.idxmax()
+            main_topic_keywords = topic_keywords[main_topic]
+            report += f"主要トピック: トピック{main_topic+1} ({', '.join(main_topic_keywords[:3])})\n"
+        
+        # 属性情報
+        for col in ['年齢', '家族人数', '満足度']:
+            if col in df.columns:
+                avg_value = df[df['cluster'] == cluster][col].mean()
+                report += f"平均{col}: {avg_value:.1f}\n"
+        
+        report += "\n"
+    
+    # 提言
+    report += "## 4. 分析結果に基づく提言\n\n"
+    
+    report += "### 移住促進策\n"
+    report += "1. 自然環境と子育て環境を強調したプロモーション戦略\n"
+    report += "2. 各クラスターに合わせた情報発信の最適化\n"
+    report += "3. 移住者の声を活用した実体験の共有\n\n"
+    
+    report += "### 課題への対応\n"
+    report += "1. 主要課題点（感情分析でネガティブなトピック）への改善策\n"
+    report += "2. 移住者のフィードバックを元にしたサービス向上\n"
+    report += "3. 長期的な移住者満足度向上のための施策\n"
+    
+    # レポート保存
+    with open(f"{output_dir}/migration_analysis_report.md", "w", encoding="utf-8") as f:
+        f.write(report)
+    
+    print(f"Report generated and saved to {output_dir}/migration_analysis_report.md")
+
+if __name__ == "__main__":
+    # Excelファイルのパスを指定して実行
+    file_path = "さんだdesk.xlsx"
+    analyze_migration_data(file_path, output_dir="三田市分析結果")
