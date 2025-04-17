@@ -1,0 +1,212 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import re
+import numpy as np
+from collections import Counter
+import seaborn as sns
+from matplotlib.font_manager import FontProperties
+import japanize_matplotlib  # For displaying Japanese characters
+
+# Function to extract Japanese content from the document
+def extract_japanese_words(text):
+    # Clean formatting
+    cleaned = text.replace(/\\[a-z0-9]+|\{|\}|\\|;/g, " ").replace(/\s+/g, " ")
+    
+    # Extract Japanese characters
+    regex = /[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\uFF00-\uFFEF]+/g
+    matches = []
+    match = None
+    
+    while ((match = regex.exec(cleaned)) !== null) {
+        if (match[0].length > 1) {
+            matches.push(match[0])
+        }
+    }
+    
+    return matches
+
+# Function to clean words (remove section headers and common stopwords)
+def clean_words(words):
+    sections_to_remove = ["ハイライト", "キーインサイト", "概要", "要約", "まとめ", "サマリー"]
+    return [word for word in words if word not in sections_to_remove]
+
+# Word frequency analysis
+def analyze_word_frequency(words):
+    # Count words with length > 1
+    word_counts = {}
+    for word in words:
+        if len(word) > 1:
+            word_counts[word] = word_counts.get(word, 0) + 1
+    
+    # Get top words
+    top_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    return top_words
+
+# Define categories for trend analysis
+def analyze_categories(words):
+    categories = {
+        "education": ["教育", "学校", "学生", "学び", "教室", "学習", "授業", "大学", "教師"],
+        "community": ["地域", "住民", "コミュニティ", "社会", "連携", "協力"],
+        "environment": ["環境", "自然", "生態系", "保護", "持続可能"],
+        "agriculture": ["農業", "農家", "栽培", "食材", "農作物"],
+        "culture": ["文化", "伝統", "芸術", "歴史", "美術館"],
+        "economy": ["経済", "発展", "活性化", "開発", "振興"]
+    }
+    
+    category_counts = {}
+    for category, related_words in categories.items():
+        count = 0
+        for word in words:
+            for related_word in related_words:
+                if related_word in word:
+                    count += 1
+                    break
+        category_counts[category] = count
+    
+    return category_counts
+
+# Sentiment analysis
+def analyze_sentiment(words):
+    positive_words = [
+        "重要", "発展", "活性化", "向上", "支援", "改善", "成功", "良い", 
+        "促進", "豊か", "強化", "効果", "貢献", "魅力", "期待", "成長",
+        "進展", "協力", "積極", "健全", "実現", "信頼"
+    ]
+    
+    negative_words = [
+        "問題", "課題", "格差", "負担", "困難", "不安", "減少", "劣化",
+        "不足", "不平等", "破壊", "悪影響", "深刻", "懸念", "障害"
+    ]
+    
+    positive_count = 0
+    negative_count = 0
+    neutral_count = len(words)
+    
+    pos_word_counts = {}
+    neg_word_counts = {}
+    
+    for word in words:
+        found_pos = False
+        found_neg = False
+        
+        for pos_word in positive_words:
+            if pos_word in word:
+                positive_count += 1
+                pos_word_counts[pos_word] = pos_word_counts.get(pos_word, 0) + 1
+                found_pos = True
+                break
+                
+        if not found_pos:
+            for neg_word in negative_words:
+                if neg_word in word:
+                    negative_count += 1
+                    neg_word_counts[neg_word] = neg_word_counts.get(neg_word, 0) + 1
+                    found_neg = True
+                    break
+        
+        if found_pos or found_neg:
+            neutral_count -= 1
+    
+    sentiment_score = 0
+    if positive_count + negative_count > 0:
+        sentiment_score = (positive_count - negative_count) / (positive_count + negative_count)
+    
+    top_pos = sorted(pos_word_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_neg = sorted(neg_word_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+    
+    return {
+        "positive": positive_count,
+        "negative": negative_count,
+        "neutral": neutral_count,
+        "score": sentiment_score,
+        "top_positive": top_pos,
+        "top_negative": top_neg
+    }
+
+# Create visualizations
+def create_visualizations(word_freq, categories, sentiment):
+    plt.figure(figsize=(15, 10))
+    plt.suptitle("日本語ドキュメント分析", fontsize=16)
+    
+    # Word frequency chart
+    plt.subplot(2, 2, 1)
+    words, counts = zip(*word_freq)
+    plt.barh(words, counts)
+    plt.title("頻出単語トップ10")
+    plt.xlabel("出現回数")
+    
+    # Category chart
+    plt.subplot(2, 2, 2)
+    category_names = [f"{k} ({v}回)" for k, v in categories.items()]
+    category_values = list(categories.values())
+    plt.barh(category_names, category_values)
+    plt.title("カテゴリー分析")
+    plt.xlabel("言及数")
+    
+    # Sentiment pie chart
+    plt.subplot(2, 2, 3)
+    sentiment_labels = [f"ポジティブ ({sentiment['positive']})", f"ネガティブ ({sentiment['negative']})"]
+    sentiment_values = [sentiment['positive'], sentiment['negative']]
+    plt.pie(sentiment_values, labels=sentiment_labels, autopct='%1.1f%%', 
+            colors=['#00C49F', '#FF8042'])
+    plt.title(f"感情分析 (スコア: {sentiment['score']:.3f})")
+    
+    # Top sentiment words
+    plt.subplot(2, 2, 4)
+    plt.axis('off')
+    plt.title("主要な感情表現単語")
+    
+    pos_text = "ポジティブ単語:\n" + "\n".join([f"{word}: {count}回" for word, count in sentiment['top_positive']])
+    neg_text = "\n\nネガティブ単語:\n" + "\n".join([f"{word}: {count}回" for word, count in sentiment['top_negative']])
+    
+    plt.text(0.1, 0.5, pos_text + neg_text, fontsize=10, verticalalignment='center')
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.savefig("japanese_document_analysis.png", dpi=300, bbox_inches='tight')
+    plt.show()
+
+# Main analysis function
+def analyze_japanese_document(file_path):
+    # Read the file
+    with open(file_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    
+    # Extract Japanese content
+    japanese_content = extract_japanese_words(text)
+    
+    # Clean the words
+    cleaned_words = clean_words(japanese_content)
+    
+    # Word frequency analysis
+    word_freq = analyze_word_frequency(cleaned_words)
+    print("Top 10 most frequent words:")
+    for word, count in word_freq:
+        print(f"- {word}: {count}回")
+    
+    # Category analysis
+    categories = analyze_categories(cleaned_words)
+    print("\nCategory analysis:")
+    for category, count in categories.items():
+        print(f"- {category}: {count}回")
+    
+    # Sentiment analysis
+    sentiment = analyze_sentiment(cleaned_words)
+    print("\nSentiment analysis:")
+    print(f"Positive words: {sentiment['positive']}")
+    print(f"Negative words: {sentiment['negative']}")
+    print(f"Neutral words: {sentiment['neutral']}")
+    print(f"Sentiment score: {sentiment['score']:.3f}")
+    
+    # Create visualizations
+    create_visualizations(word_freq, categories, sentiment)
+    
+    return {
+        "word_frequency": word_freq,
+        "categories": categories,
+        "sentiment": sentiment
+    }
+
+# Run the analysis
+if __name__ == "__main__":
+    results = analyze_japanese_document("sanda.rtf")
+    print("\nAnalysis complete. Visualization saved as 'japanese_document_analysis.png'")
